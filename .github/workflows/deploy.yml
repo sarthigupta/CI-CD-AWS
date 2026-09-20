@@ -7,6 +7,9 @@ on:
 
 jobs:
 
+  # =========================
+  # CI: Test the application
+  # =========================
   test:
     runs-on: ubuntu-latest
 
@@ -22,13 +25,20 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run tests
+        env:
+          PYTHONPATH: .
         run: |
-          pytest
+          python -c "import app; print('Flask app imported successfully')"
+          python -m pytest
 
 
+  # =========================
+  # CD: Deploy to AWS EC2
+  # =========================
   deploy:
     needs: test
     runs-on: ubuntu-latest
@@ -38,7 +48,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy files to EC2
+      - name: Copy application files to EC2
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -47,7 +57,7 @@ jobs:
           source: "app.py,requirements.txt"
           target: "/opt/flask-cicd"
 
-      - name: Deploy application
+      - name: Install dependencies and restart Flask
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -55,6 +65,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /opt/flask-cicd
+
             /opt/flask-cicd/venv/bin/pip install -r requirements.txt
+
             sudo systemctl restart flask-cicd
+
             sudo systemctl status flask-cicd --no-pager
